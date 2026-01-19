@@ -1,0 +1,64 @@
+*INCLUDE, INPUT=mesh.inp
+**
+** RADIUS = 5 MM  =>  CENTER:  X=0  Y=0+5                  
+*NODE, NSET=SPHERE                                                                         
+10000, 0.0, 5.0, 0.0                                                  
+*RIGID BODY,ANALYTICAL SURFACE=RSURF,REF NODE=SPHERE
+*SURFACE, TYPE=SEGMENTS, NAME=RSURF                                  
+START,   5, 5
+CIRCL,   0.0, 0.0, 0.0, 5
+CIRCL,  -5, 5, 0.0, 5      
+*SURFACE, NAME=SURF
+SPECIMEN
+*CONTACT PAIR, INTERACTION=SLIDE
+SURF, RSURF
+*SURFACE INTERACTION, NAME=SLIDE
+1.0
+*BOUNDARY
+10000, 1, , 0
+10000, 6, , 0
+**
+**
+** Steel Ball (rigid) and Specimen (elastic) modelled with contact modulus Eeff
+**
+*MATERIAL, NAME=STEEL
+**
+*ELASTIC, TYPE=ISO
+     YOUNGSMODULUS,  0.3
+*PLASTIC
+       YIELDSTRESS,  0.0
+**
+** probe
+**
+*SOLID SECTION, ELSET=SPECIMEN, MATERIAL=STEEL
+          1.,
+**
+**
+** Step  1, Default Static Step
+** LoadCase, Default
+**
+*STEP, AMPLITUDE=RAMP, NLGEOM, INC=1000
+*STATIC
+0.05, 1.0, , 0.05
+**
+** TopLoad
+**
+*BOUNDARY, OP=MOD
+SPHERE, 2,2,        -0.5
+**
+**
+*OUTPUT, HISTORY, FREQ=1
+*CONTACT OUTPUT
+CAREA
+**
+*OUTPUT, FIELD, FREQ=1
+*NODE OUTPUT
+U,RF
+**
+** ELEMENT OUTPUT REQUESTS
+**
+*OUTPUT, FIELD, FREQ=1
+*ELEMENT OUTPUT
+S,E
+**
+*END STEP
