@@ -2,16 +2,31 @@ import os
 from odbAccess import *
 from math import sqrt, pi
 
+# -------------------------------
+# Configuration
+# -------------------------------
+
 # Radius of spherical indenter
 R = 5.0
 
+# Folder where parent script stored all jobs
+JOB_FOLDER = "Jobs_Batch"
+
+# Folder for rpt files
+rpt_folder = "RPT_Files"
+if not os.path.exists(rpt_folder):
+    os.makedirs(rpt_folder)
+
+# -------------------------------
 # Function to read data from a single job
+# -------------------------------
 def read_hPA(job):
-    # Open odb and create corresponding rpt file
+    # Open rpt file
     rpt = open(os.path.join(rpt_folder, job + ".rpt"), "w")
     rpt.write("Time         Displacement        Force  ContactArea \n")
 
-    odb = openOdb(job + ".odb")
+    # Open odb from batch folder
+    odb = openOdb(os.path.join(JOB_FOLDER, job + ".odb"))
 
     # Reference node for indenter
     refNSet = odb.rootAssembly.instances['PART-1-1'].nodeSets['SPHERE']
@@ -39,10 +54,11 @@ def read_hPA(job):
             t_max = ftime
 
         if ftime != Ctime:
-            print(f"Warning: Increment {i} - Time mismatch")
+            print("Warning: Increment %d - Time mismatch" % i)
             print("History time:", Ctime, "Field time:", ftime)
 
-        rpt.write("%12.6e %12.6e %12.6e %12.6e\n" % (ftime, displacement, force, contactArea))
+        rpt.write("%12.6e %12.6e %12.6e %12.6e\n"
+                  % (ftime, displacement, force, contactArea))
 
     t_avg /= float(Nframes)
 
@@ -56,25 +72,25 @@ def read_hPA(job):
 # Main script: automatically detect jobs
 # -------------------------------
 
-# Create folder for rpt files
-rpt_folder = "RPT_Files"
-if not os.path.exists(rpt_folder):
-    os.makedirs(rpt_folder)
+# Detect all Job-XXXX.odb files in batch folder
+job_files = sorted([
+    f for f in os.listdir(JOB_FOLDER)
+    if f.startswith("Job-") and f.endswith(".odb")
+])
 
-# Detect all Job-XX.odb files in current directory
-job_files = sorted([f for f in os.listdir('.') if f.startswith('Job-') and f.endswith('.odb')])
-
-# Open a single database file for all jobs
+# Open database file
 Database = open("Database-R.dat", "w")
 Database.write("JobName      AvgTime       MaxTime\n")
 
 # Loop through all detected jobs
 for job_file in job_files:
-    job_name = job_file.replace('.odb', '')
+    job_name = job_file.replace(".odb", "")
     print("Reading job:", job_name)
+
     t_avg, t_max = read_hPA(job_name)
     Database.write("%s %12.6e %12.6e\n" % (job_name, t_avg, t_max))
 
 Database.close()
-print("All jobs processed. RPT files saved in folder:", rpt_folder)
 
+print("All jobs processed.")
+print("RPT files saved in folder:", rpt_folder)
