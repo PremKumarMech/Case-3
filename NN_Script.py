@@ -19,9 +19,21 @@ import os
 # -----------------------------
 # Global parameters
 # -----------------------------
-RPT_folder = "RPT_Files"       # Folder containing Job-XX.rpt
-Database_file = "Database-P.dat"  # Anchoring E & Y values
-n_points_per_curve = 50          # Number of hPA points per job (assume uniform)
+RPT_folder = "RPT_Files"
+Database_file = "Database-P.dat"
+n_points_per_curve = 50
+
+# -----------------------------
+# Output folders
+# -----------------------------
+NN_folder = "NN_Output"
+forward_folder = os.path.join(NN_folder, "forward_predictions")
+inverse_folder = os.path.join(NN_folder, "inverse_predictions")
+
+for folder in [NN_folder, forward_folder, inverse_folder]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
 # -----------------------------
 # Read Database-P.dat
 # -----------------------------
@@ -39,40 +51,34 @@ with open(Database_file, "r") as f:
 # -----------------------------
 # Read RPT files & build dataset
 # -----------------------------
-X_hPA = []   # hPA curves -> inverse NN input
-Y_params = [] # E,Y -> inverse NN target, forward NN input
-X_params = [] # E,Y -> forward NN input
-Y_hPA = []   # hPA curves -> forward NN target
+X_hPA = []
+Y_params = []
+X_params = []
+Y_hPA = []
 
 for job_num, E, Y in zip(job_numbers, E_values, Y_values):
-    rpt_file = os.path.join(RPT_folder, f"Job-{job_num:02d}.rpt")
+    rpt_file = os.path.join(RPT_folder, f"Job-{job_num:04d}.rpt")
     if not os.path.exists(rpt_file):
-        print(f"Warning: {rpt_file} not found. Skipping job {job_num}.")
+        print(f"Warning: {rpt_file} not found. Skipping.")
         continue
-    
-    # Read hPA points from rpt
+
     hPA_curve = []
     with open(rpt_file, "r") as f:
-        next(f)  # skip header line
+        next(f)
         for i, line in enumerate(f):
             if i >= n_points_per_curve:
                 break
             parts = line.split()
             displacement = float(parts[1])
             force = float(parts[2])
-            # Optional: concatenate displacement & force into one feature
-            hPA_curve.append(displacement)
-            hPA_curve.append(force)
-    
-    if len(hPA_curve) != 2*n_points_per_curve:
-        print(f"Warning: Job-{job_num:02d}.rpt has {len(hPA_curve)} points instead of expected {2*n_points_per_curve}.")
+            hPA_curve.extend([displacement, force])
+
+    if len(hPA_curve) != 2 * n_points_per_curve:
+        print(f"Warning: Job-{job_num:04d} has incomplete data.")
         continue
 
-    # Forward NN
     X_params.append([E, Y])
     Y_hPA.append(hPA_curve)
-
-    # Inverse NN
     X_hPA.append(hPA_curve)
     Y_params.append([E, Y])
 
@@ -88,10 +94,10 @@ Y_hPA_scaled = hPA_scaler.transform(Y_hPA)
 X_hPA_scaled = hPA_scaler.transform(X_hPA)
 
 # -----------------------------
-# Train Forward NN (E,Y -> hPA)
+# Train Forward NN
 # -----------------------------
 forward_NN = MLPRegressor(
-    hidden_layer_sizes=(10,),   # small network
+    hidden_layer_sizes=(10,),
     activation='relu',
     solver='lbfgs',
     alpha=1e-5,
@@ -102,7 +108,7 @@ forward_NN.fit(X_params_scaled, Y_hPA_scaled)
 print("Forward NN trained.")
 
 # -----------------------------
-# Train Inverse NN (hPA -> E,Y)
+# Train Inverse NN
 # -----------------------------
 inverse_NN = MLPRegressor(
     hidden_layer_sizes=(10,),
@@ -116,21 +122,28 @@ inverse_NN.fit(X_hPA_scaled, Y_params_scaled)
 print("Inverse NN trained.")
 
 # -----------------------------
-# Example prediction
+# Save NN predictions for ALL jobs
 # -----------------------------
-# Forward example
-#E_test, Y_test = 45000.0, 95.0
-#X_test_scaled = param_scaler.transform([[E_test, Y_test]])
-#hPA_pred_scaled = forward_NN.predict(X_test_scaled)
-#hPA_pred = hPA_scaler.inverse_transform(hPA_pred_scaled)
-#print(f"Forward prediction for E={E_test}, Y={Y_test} done.")
+for i, job_num in enumerate(job_numbers):
 
-# Inverse example
-#hPA_example = hPA_pred[0]
-#X_hPA_example_scaled = hPA_scaler.transform([hPA_example])
-#E_Y_pred_scaled = inverse_NN.predict(X_hPA_example_scaled)
-#E_Y_pred = param_scaler.inverse_transform(E_Y_pred_scaled)
-#print(f"Inverse prediction from forward output: E={E_Y_pred[0,0]:.2f}, Y={E_Y_pred[0,1]:.2f}")
+    # ---- Forward prediction ----
+    hPA_pred_scaled = forward_NN.predict([X_params_scaled[i]])
+    hPA_pred = hPA_scaler.inverse_transform(hPA_pred_scaled)[0]
 
-#print("Done.")
+    forward_file = os.path.join(forward_folder, f"Job-{job_num:04d}_hPA_pred.dat")
+    with open(forward_file, "w") as f:
+        f.write("Displacement    Force\n")
+        for j in range(n_points_per_curve):
+            f.write(f"{hPA_pred[2*j]:12.6e} {hPA_pred[2*j+1]:12.6e}\n")
 
+    # ---- Inverse prediction ----
+    EY_pred_scaled = inverse_NN.predict([X_hPA_scaled[i]])
+    EY_pred = param_scaler.inverse_transform(EY_pred_scaled)[0]
+
+    inverse_file = os.path.join(inverse_folder, f"Job-{job_num:04d}_EY_pred.dat")
+    with open(inverse_file, "w") as f:
+        f.write("YoungsModulus    YieldStress\n")
+        f.write(f"{EY_pred[0]:12.6e} {EY_pred[1]:12.6e}\n")
+
+print("NN predictions saved successfully.")
+print("NN_Output folder ready for plotting.")
