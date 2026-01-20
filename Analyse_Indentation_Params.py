@@ -6,11 +6,11 @@ import shutil   # needed for folderisation
 # -----------------------------
 # Global input variables
 # -----------------------------
-num_E = 5          # number of Young's modulus values
-num_Y = 5          # number of Yield stress values
+num_E = 3          # number of Young's modulus values
+num_Y = 1          # number of Yield stress values
 
 E_start, E_end = 40000.0, 60000.0  # Young's modulus range
-Y_start, Y_end = 80.0, 120.0       # Yield stress range
+Y_start, Y_end = 100.0, 100.0       # Yield stress range
 
 # -----------------------------
 # Batch folder for all jobs
@@ -95,3 +95,15 @@ Database.close()
 print("All Abaqus jobs finished. Running Read_hPA.py to generate .rpt files...\n")
 os.system("abaqus python Read_hPA.py")
 print("Cousin script completed. Workflow fully automated!")
+
+# -----------------------------
+# 3rd Child: Neural Network Script
+# -----------------------------
+NN_script = "NN_Script.py"  # make sure this script exists in the same folder
+
+if os.path.exists(NN_script):
+    print("Launching 3rd child: Neural Network Script...")
+    os.system(f"python3 {NN_script}")
+    print("3rd child finished. All workflows completed!")
+else:
+    print(f"Error: {NN_script} not found. Make sure NN_Script.py is in the folder.")
