@@ -3,11 +3,12 @@
 
 """
 Case 3 Neural Network Script
-Forward & Inverse Mapping
+Forward & Inverse Mapping + Plotting
 
 Forward NN:  E, Y  -> hPA curve
 Inverse NN: hPA curve -> E, Y
 Both Anna (raw points) and Eric (averaged points) approaches implemented.
+Plots are generated automatically in a separate folder.
 """
 
 # -----------------------------
@@ -16,6 +17,7 @@ Both Anna (raw points) and Eric (averaged points) approaches implemented.
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 import os
+import matplotlib.pyplot as plt
 
 # -----------------------------
 # Global parameters
@@ -33,7 +35,13 @@ forward_folder = os.path.join(NN_folder, "forward_predictions")
 inverse_folder_anna = os.path.join(NN_folder, "inverse_anna")
 inverse_folder_eric = os.path.join(NN_folder, "inverse_eric")
 
-for folder in [NN_folder, forward_folder, inverse_folder_anna, inverse_folder_eric]:
+Plots_folder = "Plots"
+forward_plot_folder = os.path.join(Plots_folder, "forward")
+inverse_plot_anna_folder = os.path.join(Plots_folder, "inverse_anna")
+inverse_plot_eric_folder = os.path.join(Plots_folder, "inverse_eric")
+
+for folder in [NN_folder, forward_folder, inverse_folder_anna, inverse_folder_eric,
+               Plots_folder, forward_plot_folder, inverse_plot_anna_folder, inverse_plot_eric_folder]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
@@ -87,74 +95,55 @@ for job_num, E, Y in zip(job_numbers, E_values, Y_values):
 
     # Inverse NN - Eric (averaged)
     bin_size = len(hPA_curve) // n_bins_eric
-    avg_curve = []
-    for i in range(n_bins_eric):
-        bin_vals = hPA_curve[i*bin_size:(i+1)*bin_size]
-        avg_curve.append(sum(bin_vals)/len(bin_vals))
+    avg_curve = [sum(hPA_curve[i*bin_size:(i+1)*bin_size])/bin_size for i in range(n_bins_eric)]
     X_hPA_eric.append(avg_curve)
     Y_params_eric.append([E, Y])
 
 # -----------------------------
 # Scale data
 # -----------------------------
+# Forward NN scaling
 param_scaler = StandardScaler().fit(X_params)
 X_params_scaled = param_scaler.transform(X_params)
 
 hPA_scaler = StandardScaler().fit(Y_hPA)
 Y_hPA_scaled = hPA_scaler.transform(Y_hPA)
 
-# Inverse scaling
+# Inverse NN scaling - Anna
 param_scaler_inv = StandardScaler().fit(Y_params_anna)
-X_hPA_anna_scaled = hPA_scaler.transform(X_hPA_anna)
+X_hPA_anna_scaled = StandardScaler().fit(X_hPA_anna).transform(X_hPA_anna)
 Y_params_anna_scaled = param_scaler_inv.transform(Y_params_anna)
 
-X_hPA_eric_scaled = hPA_scaler.transform(X_hPA_eric)
+# Inverse NN scaling - Eric
+X_hPA_eric_scaled = StandardScaler().fit(X_hPA_eric).transform(X_hPA_eric)
 Y_params_eric_scaled = param_scaler_inv.transform(Y_params_eric)
 
 # -----------------------------
 # Train Forward NN
 # -----------------------------
-forward_NN = MLPRegressor(
-    hidden_layer_sizes=(10,),
-    activation='relu',
-    solver='lbfgs',
-    alpha=1e-5,
-    max_iter=1000,
-    random_state=42
-)
+forward_NN = MLPRegressor(hidden_layer_sizes=(10,), activation='relu', solver='lbfgs',
+                          alpha=1e-5, max_iter=1000, random_state=42)
 forward_NN.fit(X_params_scaled, Y_hPA_scaled)
 print("Forward NN trained.")
 
 # -----------------------------
 # Train Inverse NN - Anna
 # -----------------------------
-inverse_NN_anna = MLPRegressor(
-    hidden_layer_sizes=(10,),
-    activation='relu',
-    solver='lbfgs',
-    alpha=1e-5,
-    max_iter=1000,
-    random_state=42
-)
+inverse_NN_anna = MLPRegressor(hidden_layer_sizes=(10,), activation='relu', solver='lbfgs',
+                               alpha=1e-5, max_iter=1000, random_state=42)
 inverse_NN_anna.fit(X_hPA_anna_scaled, Y_params_anna_scaled)
 print("Inverse NN (Anna) trained.")
 
 # -----------------------------
 # Train Inverse NN - Eric
 # -----------------------------
-inverse_NN_eric = MLPRegressor(
-    hidden_layer_sizes=(10,),
-    activation='relu',
-    solver='lbfgs',
-    alpha=1e-5,
-    max_iter=1000,
-    random_state=42
-)
+inverse_NN_eric = MLPRegressor(hidden_layer_sizes=(10,), activation='relu', solver='lbfgs',
+                               alpha=1e-5, max_iter=1000, random_state=42)
 inverse_NN_eric.fit(X_hPA_eric_scaled, Y_params_eric_scaled)
 print("Inverse NN (Eric) trained.")
 
 # -----------------------------
-# Save NN predictions
+# Save NN predictions and generate plots
 # -----------------------------
 for i, job_num in enumerate(job_numbers):
 
@@ -167,6 +156,17 @@ for i, job_num in enumerate(job_numbers):
         for j in range(n_points_per_curve):
             f.write(f"{hPA_pred[2*j]:12.6e} {hPA_pred[2*j+1]:12.6e}\n")
 
+    # Plot Forward NN curve
+    plt.figure()
+    plt.plot(hPA_pred[0::2], hPA_pred[1::2], 'b-', label='Predicted hPA')
+    plt.xlabel('Displacement')
+    plt.ylabel('Force')
+    plt.title(f'Job-{job_num:04d} Forward NN')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(forward_plot_folder, f"Job-{job_num:04d}_hPA_pred.png"))
+    plt.close()
+
     # ---- Inverse prediction Anna ----
     EY_pred_scaled = inverse_NN_anna.predict([X_hPA_anna_scaled[i]])
     EY_pred = param_scaler_inv.inverse_transform(EY_pred_scaled)[0]
@@ -174,6 +174,15 @@ for i, job_num in enumerate(job_numbers):
     with open(inv_file_anna, "w") as f:
         f.write("YoungsModulus    YieldStress\n")
         f.write(f"{EY_pred[0]:12.6e} {EY_pred[1]:12.6e}\n")
+
+    # Plot Inverse Anna prediction
+    plt.figure()
+    plt.bar(['E', 'Y'], EY_pred, color=['orange', 'green'])
+    plt.ylabel('Predicted Value')
+    plt.title(f'Job-{job_num:04d} Inverse NN (Anna)')
+    plt.grid(axis='y')
+    plt.savefig(os.path.join(inverse_plot_anna_folder, f"Job-{job_num:04d}_EY_pred_anna.png"))
+    plt.close()
 
     # ---- Inverse prediction Eric ----
     EY_pred_scaled_eric = inverse_NN_eric.predict([X_hPA_eric_scaled[i]])
@@ -183,5 +192,14 @@ for i, job_num in enumerate(job_numbers):
         f.write("YoungsModulus    YieldStress\n")
         f.write(f"{EY_pred_eric[0]:12.6e} {EY_pred_eric[1]:12.6e}\n")
 
-print("NN predictions saved for Anna & Eric approaches.")
-print("NN_Output folder ready for plotting.")
+    # Plot Inverse Eric prediction
+    plt.figure()
+    plt.bar(['E', 'Y'], EY_pred_eric, color=['orange', 'green'])
+    plt.ylabel('Predicted Value')
+    plt.title(f'Job-{job_num:04d} Inverse NN (Eric)')
+    plt.grid(axis='y')
+    plt.savefig(os.path.join(inverse_plot_eric_folder, f"Job-{job_num:04d}_EY_pred_eric.png"))
+    plt.close()
+
+print("NN predictions and plots saved for all jobs.")
+print("Folders ready: NN_Output and Plots.")
