@@ -6,11 +6,11 @@ import shutil   # needed for folderisation
 # -----------------------------
 # Global input variables
 # -----------------------------
-num_E = 3          # number of Young's modulus values
-num_Y = 1          # number of Yield stress values
+num_E = 5          # number of Young's modulus values
+num_Y = 5          # number of Yield stress values
 
-E_start, E_end = 40000.0, 60000.0  # Young's modulus range
-Y_start, Y_end = 100.0, 100.0       # Yield stress range
+E_start, E_end = 190000.0, 210000.0  # Young's modulus range
+Y_start, Y_end = 250.0, 500.0       # Yield stress range
 
 # -----------------------------
 # Batch folder for all jobs
@@ -107,3 +107,4 @@ if os.path.exists(NN_script):
     print("3rd child finished. All workflows completed!")
 else:
     print(f"Error: {NN_script} not found. Make sure NN_Script.py is in the folder.")
+
